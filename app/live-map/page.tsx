@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import {
@@ -14,6 +14,10 @@ import {
   FaCrosshairs,
   FaLock,
   FaMapMarkedAlt,
+  FaStop,
+  FaPlay,
+  FaRoute,
+  FaClock,
 } from "react-icons/fa";
 import type { IconType } from "react-icons";
 
@@ -23,9 +27,26 @@ interface LocationCoordinates {
   accuracy: number;
 }
 
-interface LocationReportResponse {
-  message?: string;
+interface LocationPoint {
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+}
+
+interface LiveMapResponse {
   success?: boolean;
+  message?: string;
+  data?: {
+    _id: string;
+    name: string;
+    status: string;
+    currentLocation: {
+      latitude: number;
+      longitude: number;
+      updatedAt: string;
+    };
+    locationHistory: LocationPoint[];
+  };
 }
 
 interface LocationStep {
@@ -35,40 +56,57 @@ interface LocationStep {
   description: string;
 }
 
+const API_URL = "https://shurokkha-ai-server.vercel.app/api/live-map";
+
 const locationSteps: LocationStep[] = [
   {
     icon: FaUserShield,
     number: "01",
     title: "Enter your name",
     description:
-      "Provide your name so authorized staff can identify the submitted check-in.",
+      "Provide your name so authorized staff can identify your check-in.",
   },
   {
     icon: FaCrosshairs,
     number: "02",
     title: "Capture your location",
-    description:
-      "Click Use My Location and allow your browser to access your current coordinates.",
+    description: "Allow your browser to access your current coordinates.",
   },
   {
-    icon: FaCheckCircle,
+    icon: FaRoute,
     number: "03",
-    title: "Submit securely",
+    title: "Start tracking",
     description:
-      "Send the check-in to the reporting system for authorized admin review.",
+      "Choose to share ongoing location updates and stop tracking whenever you wish.",
   },
 ];
 
 export default function LiveMapPage() {
-  const [name, setName] = useState<string>("");
-  const [location, setLocation] = useState<string>("");
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
   const [coordinates, setCoordinates] = useState<LocationCoordinates | null>(
     null,
   );
-  const [status, setStatus] = useState<string>("");
-  const [error, setError] = useState<string>("");
-  const [loadingLocation, setLoadingLocation] = useState<boolean>(false);
-  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [tracking, setTracking] = useState(false);
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [locationHistory, setLocationHistory] = useState<LocationPoint[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  const watchIdRef = useRef<number | null>(null);
+  const trackingIdRef = useRef<string | null>(null);
+  const trackingActiveRef = useRef(false);
+  const requestInProgressRef = useRef(false);
+
+  const updateLocationText = (coords: LocationCoordinates) => {
+    setCoordinates(coords);
+    setLocation(
+      `Lat: ${coords.latitude.toFixed(6)}, Lng: ${coords.longitude.toFixed(6)}`,
+    );
+  };
 
   const getLiveLocation = (): void => {
     setError("");
@@ -82,22 +120,17 @@ export default function LiveMapPage() {
     setLoadingLocation(true);
 
     navigator.geolocation.getCurrentPosition(
-      (position: GeolocationPosition) => {
-        const { latitude, longitude, accuracy } = position.coords;
-
-        const currentCoordinates: LocationCoordinates = {
-          latitude,
-          longitude,
-          accuracy,
+      (position) => {
+        const coords: LocationCoordinates = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
         };
 
-        setCoordinates(currentCoordinates);
-        setLocation(
-          `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`,
-        );
+        updateLocationText(coords);
         setLoadingLocation(false);
       },
-      (locationError: GeolocationPositionError) => {
+      (locationError) => {
         setLoadingLocation(false);
 
         if (locationError.code === 1) {
@@ -120,6 +153,85 @@ export default function LiveMapPage() {
     );
   };
 
+  const sendLocationUpdate = useCallback(
+    async (coords: LocationCoordinates, id: string, personName: string) => {
+      // Avoid overlapping network requests when GPS updates arrive quickly.
+      if (requestInProgressRef.current || !trackingActiveRef.current) return;
+
+      requestInProgressRef.current = true;
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: personName,
+            trackingId: id,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          }),
+        });
+
+        const result: LiveMapResponse = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || "Unable to update your location.");
+        }
+
+        console.log("Live location updated:", result);
+
+        setLastUpdated(new Date().toISOString());
+        setLocationHistory((previous) => [
+          ...previous,
+          {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      } catch (updateError) {
+        console.error("Location update error:", updateError);
+        setError(
+          updateError instanceof Error
+            ? updateError.message
+            : "Location update failed. Please check your connection.",
+        );
+      } finally {
+        requestInProgressRef.current = false;
+      }
+    },
+    [],
+  );
+
+  const stopTracking = useCallback((showMessage = true) => {
+    trackingActiveRef.current = false;
+
+    if (watchIdRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    setTracking(false);
+
+    if (showMessage) {
+      setStatus(
+        "Location sharing stopped on this device. Previously submitted location history remains available to authorized administrators.",
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      trackingActiveRef.current = false;
+
+      if (watchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>,
   ): Promise<void> => {
@@ -133,44 +245,108 @@ export default function LiveMapPage() {
     }
 
     if (!coordinates) {
-      setError("Please get your live location before submitting.");
+      setError("Please get your current location before submitting.");
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setError("Your browser does not support location access.");
       return;
     }
 
     setSubmitting(true);
 
     try {
-      const response = await fetch("/api/location-reports", {
+      // Create the initial tracking record in MongoDB.
+      const response = await fetch(API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           name: name.trim(),
-          location,
           latitude: coordinates.latitude,
           longitude: coordinates.longitude,
-          accuracy: coordinates.accuracy,
-          reportType: "Women's Safety Check-in",
         }),
       });
 
-      const result: LocationReportResponse = await response.json();
+      const result: LiveMapResponse = await response.json();
 
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Unable to submit your location. Please try again.",
-        );
+      if (!response.ok || !result.data?._id) {
+        throw new Error(result.message || "Unable to submit your location.");
       }
 
-      setStatus(
-        result.message ||
-          "Your safety check-in has been submitted successfully.",
+      const id = result.data._id;
+
+      console.log("Live Map POST Response:", result);
+      console.log("Tracking ID:", id);
+
+      setTrackingId(id);
+      trackingIdRef.current = id;
+      setLocationHistory(
+        result.data.locationHistory || [
+          {
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+            timestamp: new Date().toISOString(),
+          },
+        ],
       );
+      setLastUpdated(new Date().toISOString());
+      setTracking(true);
+      trackingActiveRef.current = true;
+
+      setStatus(
+        "Your check-in was submitted successfully. Location sharing is now active.",
+      );
+
+      const personName = name.trim();
+
+      // Keep requesting location updates while this page is active.
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          if (!trackingActiveRef.current) return;
+
+          const current: LocationCoordinates = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+
+          updateLocationText(current);
+
+          const currentTrackingId = trackingIdRef.current;
+
+          if (currentTrackingId) {
+            void sendLocationUpdate(current, currentTrackingId, personName);
+          }
+        },
+        (locationError) => {
+          if (!trackingActiveRef.current) return;
+
+          if (locationError.code === 1) {
+            setError(
+              "Location permission was revoked. Location updates may have stopped.",
+            );
+            stopTracking(false);
+          } else {
+            setError(
+              "Unable to get a new location. Check your GPS signal and try again.",
+            );
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 3000,
+          timeout: 20000,
+        },
+      );
+
+      watchIdRef.current = watchId;
       setName("");
-      setLocation("");
-      setCoordinates(null);
     } catch (submitError: unknown) {
+      console.error("Live Map submission error:", submitError);
+
       setError(
         submitError instanceof Error
           ? submitError.message
@@ -182,9 +358,9 @@ export default function LiveMapPage() {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden  bg-[#020817] text-white">
+    <main className="min-h-screen overflow-hidden bg-[#020817] text-white">
       {/* HERO */}
-      <section className="relative px-5 pb-12 pt-16 mt-8 sm:px-8 sm:pb-16 sm:pt-20 lg:px-12">
+      <section className="relative mt-8 px-5 pb-12 pt-16 sm:px-8 sm:pb-16 sm:pt-20 lg:px-12">
         <div className="pointer-events-none absolute -left-32 top-0 h-80 w-80 rounded-full bg-blue-600/10 blur-[110px]" />
         <div className="pointer-events-none absolute -right-20 top-20 h-80 w-80 rounded-full bg-cyan-400/10 blur-[110px]" />
 
@@ -192,7 +368,7 @@ export default function LiveMapPage() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-2 text-xs font-bold tracking-wide text-cyan-300">
               <FaShieldAlt />
-              WOMEN&apos;S SAFETY CHECK-IN
+              WOMEN&apos;S SAFETY LIVE MAP
             </div>
 
             <h1 className="mt-6 max-w-2xl text-4xl font-black leading-tight tracking-tight sm:text-5xl lg:text-6xl">
@@ -203,9 +379,9 @@ export default function LiveMapPage() {
             </h1>
 
             <p className="mt-6 max-w-xl text-sm leading-7 text-slate-400 sm:text-base sm:leading-8">
-              Share your current location with the ShurokkhaAI safety team. Your
-              check-in helps authorized administrators understand reported
-              safety concerns and respond appropriately.
+              Share your location with the ShurokkhaAI safety team. When you
+              explicitly start location sharing, your device can send updates
+              while this page remains active. You can stop sharing at any time.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -232,7 +408,7 @@ export default function LiveMapPage() {
               </span>
               <span className="flex items-center gap-2">
                 <FaUserShield className="text-cyan-300" />
-                Admin-directed reporting
+                Authorized admin reporting
               </span>
             </div>
           </div>
@@ -271,17 +447,25 @@ export default function LiveMapPage() {
                 <div className="absolute bottom-8 right-8 h-32 w-32 rounded-full border border-cyan-400/15" />
 
                 <div className="relative flex flex-col items-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-cyan-300/30 bg-cyan-400/10 text-2xl text-cyan-300 shadow-lg shadow-cyan-900/30">
+                  <div
+                    className={`flex h-16 w-16 items-center justify-center rounded-full border text-2xl shadow-lg ${
+                      tracking
+                        ? "animate-pulse border-emerald-300/40 bg-emerald-400/10 text-emerald-300 shadow-emerald-900/30"
+                        : "border-cyan-300/30 bg-cyan-400/10 text-cyan-300 shadow-cyan-900/30"
+                    }`}
+                  >
                     <FaMapMarkerAlt />
                   </div>
 
                   <div className="mt-3 rounded-xl border border-white/10 bg-[#071426] px-4 py-3 text-center">
                     <p className="text-sm font-bold text-white">
-                      Location check-in
+                      {tracking
+                        ? "Location sharing active"
+                        : "Location check-in"}
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
                       {coordinates
-                        ? "Location captured on this device"
+                        ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`
                         : "Waiting for your permission"}
                     </p>
                   </div>
@@ -291,9 +475,9 @@ export default function LiveMapPage() {
               <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-400/10 bg-blue-500/[0.05] p-4">
                 <FaShieldAlt className="mt-0.5 shrink-0 text-cyan-300" />
                 <p className="text-xs leading-6 text-slate-400">
-                  Your device location is requested only when you choose to
-                  share it. This preview is illustrative and does not show a
-                  live street map.
+                  This is a location preview, not a street map. Your browser
+                  must remain able to provide location updates for tracking to
+                  continue.
                 </p>
               </div>
             </div>
@@ -320,7 +504,7 @@ export default function LiveMapPage() {
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     Enter your name, capture your current coordinates, and
-                    submit your check-in to the safety team.
+                    choose to start sharing location updates.
                   </p>
                 </div>
               </div>
@@ -344,7 +528,8 @@ export default function LiveMapPage() {
                   onChange={(event) => setName(event.target.value)}
                   required
                   maxLength={100}
-                  className="w-full rounded-xl border border-white/10 bg-[#020817]/80 px-4 py-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10"
+                  disabled={tracking || submitting}
+                  className="w-full rounded-xl border border-white/10 bg-[#020817]/80 px-4 py-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10 disabled:opacity-60"
                 />
               </div>
 
@@ -370,7 +555,7 @@ export default function LiveMapPage() {
                   <button
                     type="button"
                     onClick={getLiveLocation}
-                    disabled={loadingLocation || submitting}
+                    disabled={loadingLocation || submitting || tracking}
                     className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-5 py-4 text-sm font-bold text-cyan-300 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <FaCrosshairs
@@ -415,26 +600,55 @@ export default function LiveMapPage() {
                 </div>
               )}
 
+              {tracking && (
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.05] p-4">
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-300">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-300" />
+                    Location sharing is active
+                  </div>
+                  <p className="mt-2 break-words text-xs leading-6 text-slate-400">
+                    Tracking ID: {trackingId}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Saved location points: {locationHistory.length}
+                  </p>
+                  {lastUpdated && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Last update: {new Date(lastUpdated).toLocaleTimeString()}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="rounded-xl border border-white/[0.07] bg-[#020817]/50 p-4">
                 <p className="text-xs leading-6 text-slate-400">
-                  By submitting, you agree to share your name and location with
-                  authorized ShurokkhaAI administrators for safety reporting.
-                  Your location is not continuously tracked by this form.
+                  When you start sharing, your name and location updates are
+                  sent to the backend for authorized admin review. You can stop
+                  sharing from this page at any time.
                 </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={submitting || loadingLocation || !coordinates}
-                className="group flex w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-blue-950/30 transition hover:from-blue-500 hover:to-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {submitting
-                  ? "Submitting Check-in..."
-                  : "Submit Safety Check-in"}
-                {!submitting && (
-                  <FaArrowRight className="transition-transform group-hover:translate-x-1" />
-                )}
-              </button>
+              {!tracking ? (
+                <button
+                  type="submit"
+                  disabled={submitting || loadingLocation || !coordinates}
+                  className="group flex w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-blue-950/30 transition hover:from-blue-500 hover:to-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting
+                    ? "Starting Location Sharing..."
+                    : "Start Sharing Location"}
+                  {!submitting && <FaPlay />}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => stopTracking(true)}
+                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-red-400/25 bg-red-400/10 px-6 py-4 text-sm font-bold text-red-300 transition hover:bg-red-400/15"
+                >
+                  <FaStop />
+                  Stop Location Sharing
+                </button>
+              )}
             </form>
           </div>
 
@@ -455,10 +669,11 @@ export default function LiveMapPage() {
                     01
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold">Location is shared</h4>
+                    <h4 className="text-sm font-bold">
+                      Initial location saved
+                    </h4>
                     <p className="mt-1 text-xs leading-6 text-slate-400">
-                      You submit your name and captured coordinates with your
-                      permission.
+                      Your initial check-in is stored in the backend.
                     </p>
                   </div>
                 </div>
@@ -468,12 +683,10 @@ export default function LiveMapPage() {
                     02
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold">
-                      Admin receives the report
-                    </h4>
+                    <h4 className="text-sm font-bold">Location updates sent</h4>
                     <p className="mt-1 text-xs leading-6 text-slate-400">
-                      The check-in can appear in a restricted dashboard after
-                      backend integration.
+                      While sharing is active, new coordinates are sent to your
+                      tracking record.
                     </p>
                   </div>
                 </div>
@@ -484,11 +697,11 @@ export default function LiveMapPage() {
                   </div>
                   <div>
                     <h4 className="text-sm font-bold">
-                      Safety concerns are reviewed
+                      Admin reviews the trail
                     </h4>
                     <p className="mt-1 text-xs leading-6 text-slate-400">
-                      Authorized administrators can review reports and follow
-                      the response process established by your team.
+                      The admin report page can view the latest coordinates and
+                      stored location history.
                     </p>
                   </div>
                 </div>
@@ -504,15 +717,15 @@ export default function LiveMapPage() {
               <ul className="mt-5 space-y-3 text-sm leading-6 text-slate-400">
                 <li className="flex gap-3">
                   <FaCheckCircle className="mt-1 shrink-0 text-cyan-300" />
-                  Location access requires your browser&apos;s permission.
+                  Location access requires browser permission.
                 </li>
                 <li className="flex gap-3">
                   <FaCheckCircle className="mt-1 shrink-0 text-cyan-300" />
-                  Only collect information necessary for the safety service.
+                  Tracking is started by your explicit action.
                 </li>
                 <li className="flex gap-3">
                   <FaCheckCircle className="mt-1 shrink-0 text-cyan-300" />
-                  Restrict precise location data to authorized administrators.
+                  Stop sharing whenever you choose.
                 </li>
               </ul>
             </div>
@@ -522,13 +735,13 @@ export default function LiveMapPage() {
                 <FaExclamationTriangle className="mt-1 shrink-0 text-amber-300" />
                 <div>
                   <h3 className="text-sm font-bold text-amber-200">
-                    Need immediate help?
+                    Tracking limitations
                   </h3>
                   <p className="mt-2 text-xs leading-6 text-slate-400">
-                    This check-in is not an emergency SOS service and does not
-                    guarantee an immediate response. If you are in immediate
-                    danger, contact local emergency services or a trusted
-                    person.
+                    Location updates may pause if the browser tab closes, the
+                    device suspends the page, GPS becomes unavailable, or the
+                    internet disconnects. Stopping sharing here stops new
+                    updates; it does not erase previously stored history.
                   </p>
                 </div>
               </div>
@@ -551,13 +764,12 @@ export default function LiveMapPage() {
               Three steps to share your location
             </h2>
             <p className="mt-3 text-sm leading-7 text-slate-400">
-              Capture your current location, check the details, and submit your
-              report.
+              Capture your location, start sharing, and stop whenever you wish.
             </p>
           </div>
 
           <div className="mt-9 grid gap-4 md:grid-cols-3">
-            {locationSteps.map((step: LocationStep) => {
+            {locationSteps.map((step) => {
               const Icon = step.icon;
 
               return (
@@ -589,7 +801,7 @@ export default function LiveMapPage() {
                 Help make your community safer.
               </h3>
               <p className="mt-1 text-sm text-slate-400">
-                Share a check-in when you choose to use this service.
+                Share your location only when you choose to use this service.
               </p>
             </div>
 

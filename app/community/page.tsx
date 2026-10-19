@@ -7,7 +7,6 @@ import {
   FaArrowRight,
   FaExclamationTriangle,
   FaMapMarkerAlt,
-  FaCamera,
   FaUsers,
   FaClipboardCheck,
   FaRegLightbulb,
@@ -20,7 +19,6 @@ import {
   FaCloudUploadAlt,
   FaChevronDown,
   FaInfoCircle,
-  
 } from "react-icons/fa";
 
 const categories = [
@@ -65,6 +63,9 @@ const guidelines = [
   "Do not submit threats, false accusations, or abusive content.",
 ];
 
+const API_URL = "https://shurokkha-ai-server.vercel.app/api/reports";
+const IMGBB_API_KEY = "1c8679e7843dd7b657ae26999c2f9d9b";
+
 export default function CommunityPage() {
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [imageName, setImageName] = useState("");
@@ -72,43 +73,118 @@ export default function CommunityPage() {
   const [statusType, setStatusType] = useState("success");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(event:any) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setStatus("");
     setIsSubmitting(true);
 
+    const form = event.currentTarget;
+
     try {
-      const form = event.currentTarget;
       const formData = new FormData(form);
+      const file = formData.get("attachment");
 
-      formData.set("isAnonymous", String(isAnonymous));
-
-      // This endpoint must be implemented to store reports and
-      // make them available in the admin dashboard.
-      const response = await fetch("/api/reports", {
-        method: "POST",
-        body: formData,
+      // Log the submitted form data.
+      console.log("Community form data:", {
+        category: formData.get("category"),
+        title: formData.get("title"),
+        description: formData.get("description"),
+        location: formData.get("location"),
+        name: isAnonymous ? null : formData.get("name"),
+        email: isAnonymous ? null : formData.get("email"),
+        isAnonymous,
+        attachment:
+          file instanceof File && file.size > 0
+            ? {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+              }
+            : null,
       });
 
-      const result = await response.json().catch(() => ({}));
+      // Upload the optional image directly to ImageBB.
+      let imageUrl = "";
 
-      if (!response.ok) {
-        throw new Error(
-          result.message || "We couldn't submit your report. Please try again.",
+      if (file instanceof File && file.size > 0) {
+        const imageFormData = new FormData();
+        imageFormData.append("image", file);
+
+        console.log("Uploading image to ImageBB...");
+
+        const imageResponse = await fetch(
+          `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
+          {
+            method: "POST",
+            body: imageFormData,
+          },
         );
+
+        const imageResult = await imageResponse.json();
+
+        if (!imageResponse.ok || !imageResult.success) {
+          console.error("ImageBB upload error:", imageResult);
+          throw new Error(imageResult.error?.message || "Image upload failed.");
+        }
+
+        imageUrl = imageResult.data.url;
+
+        console.log("ImageBB upload successful:", imageUrl);
       }
+
+      // Build JSON payload for your existing backend API.
+      const payload = {
+        category: String(formData.get("category") || ""),
+        title: String(formData.get("title") || "").trim(),
+        description: String(formData.get("description") || "").trim(),
+        location: String(formData.get("location") || "").trim(),
+        name: isAnonymous ? null : String(formData.get("name") || "").trim(),
+        email: isAnonymous
+          ? null
+          : String(formData.get("email") || "").trim() || null,
+        isAnonymous,
+        imageUrl: imageUrl || null,
+      };
+
+      console.log("Sending report to backend:", payload);
+
+      // Create report in MongoDB through your Express API.
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      console.log("Backend API response:", result);
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "We couldn't submit your report.");
+      }
+
+      console.log("Report created successfully:", result.data);
 
       setStatusType("success");
       setStatus(
         result.message || "Your report was submitted successfully for review.",
       );
+
+      form.reset();
       setImageName("");
       setIsAnonymous(false);
-      form.reset();
     } catch (error) {
+      console.error("Community report submission failed:", error);
+
       setStatusType("error");
-      
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -232,7 +308,6 @@ export default function CommunityPage() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-400/20 bg-blue-500/10 text-xl text-cyan-300">
                   <FaFileAlt />
                 </div>
-
                 <div>
                   <h2 className="text-xl font-bold text-white sm:text-2xl">
                     Submit a report
@@ -244,11 +319,7 @@ export default function CommunityPage() {
               </div>
             </div>
 
-            <form
-              onSubmit={handleSubmit}
-              encType="multipart/form-data"
-              className="space-y-6 p-6 sm:p-8"
-            >
+            <form onSubmit={handleSubmit} className="space-y-6 p-6 sm:p-8">
               {/* Category */}
               <div>
                 <label
@@ -257,7 +328,6 @@ export default function CommunityPage() {
                 >
                   What is your report about? *
                 </label>
-
                 <div className="relative">
                   <select
                     id="category"
@@ -287,7 +357,6 @@ export default function CommunityPage() {
                 >
                   Report title *
                 </label>
-
                 <input
                   id="title"
                   name="title"
@@ -297,7 +366,6 @@ export default function CommunityPage() {
                   placeholder="Briefly describe the problem"
                   className="w-full rounded-xl border border-white/10 bg-[#0C1A2E] px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10"
                 />
-
                 <p className="mt-2 text-xs text-slate-500">
                   Example: Broken streetlights near the local market
                 </p>
@@ -311,7 +379,6 @@ export default function CommunityPage() {
                 >
                   Describe the issue *
                 </label>
-
                 <textarea
                   id="description"
                   name="description"
@@ -322,7 +389,6 @@ export default function CommunityPage() {
                   placeholder="What happened? Where did it happen? Why does it need attention? Share the relevant details..."
                   className="w-full resize-y rounded-xl border border-white/10 bg-[#0C1A2E] px-4 py-3.5 text-sm leading-7 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10"
                 />
-
                 <p className="mt-2 flex items-start gap-2 text-xs leading-5 text-slate-500">
                   <FaInfoCircle className="mt-0.5 shrink-0 text-cyan-400" />
                   Stick to what you observed or experienced. Avoid sharing
@@ -339,7 +405,6 @@ export default function CommunityPage() {
                   <FaMapMarkerAlt className="text-cyan-300" />
                   Location of the issue *
                 </label>
-
                 <input
                   id="location"
                   name="location"
@@ -348,10 +413,9 @@ export default function CommunityPage() {
                   placeholder="Area, road, landmark, or neighborhood"
                   className="w-full rounded-xl border border-white/10 bg-[#0C1A2E] px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10"
                 />
-
                 <p className="mt-2 text-xs text-slate-500">
                   Share only the location details necessary to understand the
-                  concern. Avoid posting someone's private address.
+                  concern.
                 </p>
               </div>
 
@@ -364,7 +428,6 @@ export default function CommunityPage() {
                   >
                     Your name {!isAnonymous && "*"}
                   </label>
-
                   <input
                     id="name"
                     name="name"
@@ -388,7 +451,6 @@ export default function CommunityPage() {
                       (optional)
                     </span>
                   </label>
-
                   <input
                     id="email"
                     name="email"
@@ -400,7 +462,7 @@ export default function CommunityPage() {
                 </div>
               </div>
 
-              {/* Optional attachment */}
+              {/* Optional image */}
               <div>
                 <label
                   htmlFor="attachment"
@@ -417,11 +479,9 @@ export default function CommunityPage() {
                   <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-xl text-cyan-300 transition group-hover:bg-cyan-400/10">
                     <FaCloudUploadAlt />
                   </span>
-
                   <span className="mt-4 text-sm font-semibold text-slate-200">
                     {imageName || "Click to upload a photo"}
                   </span>
-
                   <span className="mt-2 text-xs text-slate-500">
                     JPG, PNG, or WEBP · Maximum 5 MB
                   </span>
@@ -437,6 +497,20 @@ export default function CommunityPage() {
 
                       if (!file) {
                         setImageName("");
+                        return;
+                      }
+
+                      const allowedTypes = [
+                        "image/jpeg",
+                        "image/png",
+                        "image/webp",
+                      ];
+
+                      if (!allowedTypes.includes(file.type)) {
+                        event.target.value = "";
+                        setImageName("");
+                        setStatusType("error");
+                        setStatus("Please select a JPG, PNG, or WEBP image.");
                         return;
                       }
 
@@ -458,8 +532,11 @@ export default function CommunityPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const input = document.getElementById("attachment");
+                      const input = document.getElementById(
+                        "attachment",
+                      ) as HTMLInputElement | null;
 
+                      if (input) input.value = "";
                       setImageName("");
                     }}
                     className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-slate-400 transition hover:text-red-300"
@@ -478,17 +555,13 @@ export default function CommunityPage() {
                     onChange={(event) => setIsAnonymous(event.target.checked)}
                     className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
                   />
-
                   <span>
                     <span className="flex items-center gap-2 text-sm font-semibold text-white">
                       <FaLock className="text-cyan-300" />
                       Submit without displaying my name
                     </span>
-
                     <span className="mt-2 block text-xs leading-6 text-slate-400">
-                      Your name will be omitted from this submission. This
-                      interface does not guarantee complete anonymity; the
-                      backend must enforce privacy and access controls.
+                      Your name and email will be omitted from this submission.
                     </span>
                   </span>
                 </label>
@@ -560,11 +633,9 @@ export default function CommunityPage() {
                       {index !== reportSteps.length - 1 && (
                         <div className="absolute bottom-[-19px] left-[17px] top-10 w-px bg-gradient-to-b from-cyan-400/30 to-transparent" />
                       )}
-
                       <div className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-400/20 bg-blue-500/10 text-sm text-cyan-300">
                         <Icon />
                       </div>
-
                       <div className="pt-0.5">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-[10px] font-bold text-cyan-400">
@@ -616,9 +687,9 @@ export default function CommunityPage() {
                     Your information matters
                   </h3>
                   <p className="mt-2 text-xs leading-6 text-slate-400">
-                    Reports should be accessible only to the people who need
-                    them. Appropriate authentication, authorization, and privacy
-                    protections must be implemented on the server.
+                    Reports should be accessible only to people who need them.
+                    Appropriate authentication and privacy protections should be
+                    implemented on the server.
                   </p>
                   <Link
                     href="/privacy-policy"
@@ -640,8 +711,8 @@ export default function CommunityPage() {
                   </h3>
                   <p className="mt-2 text-xs leading-6 text-slate-400">
                     Do not wait for an online report to be reviewed. Contact the
-                    appropriate local emergency service if you or someone else
-                    is in immediate danger.
+                    appropriate local emergency service if anyone is in
+                    immediate danger.
                   </p>
                   <Link
                     href="/sos"
@@ -655,109 +726,86 @@ export default function CommunityPage() {
           </aside>
         </section>
 
-        {/* Bottom community CTA */}
+        {/* Community CTA */}
         <section className="relative mt-16 overflow-hidden rounded-3xl border border-blue-400/20 bg-gradient-to-br from-[#0B1B30] to-[#071426] p-7 sm:mt-20 sm:p-10 lg:p-12">
-          {/* Background glow */}
           <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-[90px]" />
           <div className="pointer-events-none absolute -bottom-20 -right-10 h-64 w-64 rounded-full bg-cyan-400/10 blur-[90px]" />
 
           <div className="relative">
-            {/* Heading */}
             <div className="mx-auto max-w-2xl text-center">
               <span className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
                 Our Community Impact
               </span>
-
               <h2 className="mt-4 text-2xl font-black leading-tight text-white sm:text-3xl lg:text-4xl">
                 Every report brings us one step closer to a safer community.
               </h2>
-
               <p className="mt-4 text-sm leading-7 text-slate-400 sm:text-base">
                 Every concern matters. Together, we turn community voices into
                 meaningful action and work toward safer neighborhoods.
               </p>
             </div>
 
-            {/* Statistics */}
             <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Total Reports */}
               <div className="group rounded-2xl border border-blue-400/15 bg-[#020817]/60 p-6 transition duration-300 hover:-translate-y-1 hover:border-blue-400/40">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
                   <FaFileAlt className="text-xl" />
                 </div>
-
                 <p className="mt-5 text-sm font-medium text-slate-400">
                   Total Reports Received
                 </p>
-
                 <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl">
                   1,250+
                 </h3>
-
                 <p className="mt-3 text-xs leading-5 text-slate-500">
                   Community concerns submitted
                 </p>
               </div>
 
-              {/* Resolved Reports */}
               <div className="group rounded-2xl border border-emerald-400/15 bg-[#020817]/60 p-6 transition duration-300 hover:-translate-y-1 hover:border-emerald-400/40">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-400">
                   <FaCheckCircle className="text-xl" />
                 </div>
-
                 <p className="mt-5 text-sm font-medium text-slate-400">
                   Successfully Resolved
                 </p>
-
                 <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl">
                   860+
                 </h3>
-
                 <p className="mt-3 text-xs leading-5 text-slate-500">
                   Issues marked as resolved
                 </p>
               </div>
 
-              {/* Under Review */}
               <div className="group rounded-2xl border border-amber-400/15 bg-[#020817]/60 p-6 transition duration-300 hover:-translate-y-1 hover:border-amber-400/40">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-400/10 text-amber-400">
                   <FaClock className="text-xl" />
                 </div>
-
                 <p className="mt-5 text-sm font-medium text-slate-400">
                   Under Review
                 </p>
-
                 <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl">
                   245
                 </h3>
-
                 <p className="mt-3 text-xs leading-5 text-slate-500">
                   Reports awaiting further action
                 </p>
               </div>
 
-              {/* Community Members */}
               <div className="group rounded-2xl border border-cyan-400/15 bg-[#020817]/60 p-6 transition duration-300 hover:-translate-y-1 hover:border-cyan-400/40">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300">
                   <FaUsers className="text-xl" />
                 </div>
-
                 <p className="mt-5 text-sm font-medium text-slate-400">
                   Community Reports
                 </p>
-
                 <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl">
                   145
                 </h3>
-
                 <p className="mt-3 text-xs leading-5 text-slate-500">
                   Other reports in progress
                 </p>
               </div>
             </div>
-
-          
           </div>
         </section>
       </div>
