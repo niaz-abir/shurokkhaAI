@@ -16,6 +16,7 @@ const navLinks = [
   { name: "About Us", href: "#about" },
   { name: "Our Services", href: "#services" },
   { name: "Live Map", href: "https://safeguard-live.vercel.app/" },
+  { name: "Area report", href: "/area-report" },
 ];
 
 export default function Navbar() {
