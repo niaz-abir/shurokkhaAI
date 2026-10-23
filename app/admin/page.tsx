@@ -269,14 +269,7 @@ const Admin = () => {
         </section>
 
         {/* Footer */}
-        <footer className="mt-14 flex flex-col justify-between gap-3 border-t border-white/10 py-6 text-xs text-slate-500 sm:flex-row sm:items-center">
-          <p>© {new Date().getFullYear()} ShurokkhaAI. Admin workspace.</p>
-
-          <div className="flex items-center gap-2">
-            <HiOutlineShieldExclamation className="h-4 w-4 text-blue-300" />
-            <span>Community safety management</span>
-          </div>
-        </footer>
+       
       </div>
     </main>
   );
