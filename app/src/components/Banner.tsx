@@ -8,7 +8,9 @@ import {
   FaLeaf,
   FaBrain,
   FaCheckCircle,
+  FaMapMarkedAlt,
 } from "react-icons/fa";
+
 
 export default function Home() {
   return (
@@ -23,7 +25,6 @@ export default function Home() {
 
         {/* FULL-WIDTH HERO CONTENT */}
         <div className="grid min-h-[760px] w-full grid-cols-1 items-center gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10 lg:px-12 lg:py-16 xl:gap-14 xl:px-16 2xl:px-20">
-
           {/* LEFT CONTENT */}
           <div className="relative z-10 w-full min-w-0">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-blue-500/10 px-4 py-2 text-sm text-sky-300">
@@ -48,15 +49,7 @@ export default function Home() {
             <div className="mt-9 flex flex-wrap gap-4">
               <a
                 href="#safety-features"
-                className="group inline-flex items-center gap-3 rounded-full bg-blue-600 px-7 py-4 font-semibold text-white shadow-lg shadow-blue-600/25 transition duration-300 hover:-translate-y-1 hover:bg-sky-500 hover:shadow-sky-500/20"
-              >
-                Get Started
-                <FaArrowRight className="transition-transform duration-300 group-hover:translate-x-1" />
-              </a>
-
-              <a
-                href="#safety-features"
-                className="inline-flex items-center gap-3 rounded-full border border-blue-400/40 bg-white/[0.03] px-7 py-4 font-medium text-slate-200 transition duration-300 hover:-translate-y-1 hover:border-sky-400 hover:bg-blue-500/10"
+                className="inline-flex items-center gap-3 rounded-md border border-blue-400/40 bg-white/[0.03] px-7 py-4 font-medium text-slate-200 transition duration-300 hover:-translate-y-1 hover:border-sky-400 hover:bg-blue-500/10"
               >
                 <FaShieldAlt className="text-sky-400" />
                 Explore Safety
@@ -64,44 +57,76 @@ export default function Home() {
             </div>
 
             {/* FEATURE ICONS */}
+            {/* Safety Features */}
             <div
               id="safety-features"
-              className="mt-14 grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-4 sm:gap-x-6"
+              className="mt-14 grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-4 sm:gap-x-6 sm:gap-y-0"
             >
               {[
                 {
                   icon: FaShieldAlt,
-                  label: "Personal",
-                  second: "Safety",
+                  label: "Instant SOS",
+                  second: "Emergency Assistance",
+                  color: "text-rose-400",
+                  glow: "group-hover:shadow-rose-500/20",
+                  bg: "group-hover:bg-rose-400/10",
                 },
                 {
-                  icon: FaExclamationTriangle,
-                  label: "Emergency",
-                  second: "Reports",
+                  icon: FaMapMarkedAlt,
+                  label: "Live Safety Map",
+                  second: "Real-Time Awareness",
+                  color: "text-sky-400",
+                  glow: "group-hover:shadow-sky-500/20",
+                  bg: "group-hover:bg-sky-400/10",
                 },
                 {
                   icon: FaUsers,
-                  label: "Civic",
-                  second: "Community",
+                  label: "Stronger Together",
+                  second: "Community Support",
+                  color: "text-violet-400",
+                  glow: "group-hover:shadow-violet-500/20",
+                  bg: "group-hover:bg-violet-400/10",
                 },
                 {
                   icon: FaLeaf,
-                  label: "Cleaner",
-                  second: "Environment",
+                  label: "Safer Neighborhoods",
+                  second: "Area-Based Reporting",
+                  color: "text-emerald-400",
+                  glow: "group-hover:shadow-emerald-500/20",
+                  bg: "group-hover:bg-emerald-400/10",
                 },
-              ].map((item) => {
+              ].map((item, index) => {
                 const Icon = item.icon;
 
                 return (
                   <div
                     key={item.label}
-                    className="flex items-start gap-3 sm:flex-col sm:gap-3"
+                    style={{ animationDelay: `${index * 120}ms` }}
+                    className="group animate-[fadeInUp_0.7s_ease-out_both] flex items-start gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3 transition-all duration-300 hover:-translate-y-1 hover:border-white/15 hover:bg-white/[0.06] hover:shadow-xl sm:flex-col sm:gap-4 sm:border-transparent sm:bg-transparent sm:p-0 sm:shadow-none"
                   >
-                    <Icon className="mt-1 shrink-0 text-2xl text-sky-400 transition duration-300 hover:scale-110" />
+                    <div
+                      className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] transition-all duration-300 group-hover:scale-110 group-hover:border-white/15 ${item.bg} ${item.glow} group-hover:shadow-lg sm:h-12 sm:w-12`}
+                    >
+                      <Icon
+                        className={`text-xl transition-all duration-300 group-hover:rotate-[-6deg] sm:text-2xl ${item.color}`}
+                      />
 
-                    <div className="text-sm font-medium text-slate-200">
-                      <p>{item.label}</p>
-                      <p className="text-slate-400">{item.second}</p>
+                      <span
+                        className={`absolute -right-1 -top-1 h-2 w-2 rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100 ${item.color.replace(
+                          "text-",
+                          "bg-",
+                        )}`}
+                      />
+                    </div>
+
+                    <div className="min-w-0 pt-0.5 sm:pt-0">
+                      <p className="text-sm font-semibold tracking-wide text-white transition-colors duration-300 group-hover:text-sky-200">
+                        {item.label}
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-slate-400 transition-colors duration-300 group-hover:text-slate-300">
+                        {item.second}
+                      </p>
                     </div>
                   </div>
                 );

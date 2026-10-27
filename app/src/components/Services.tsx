@@ -18,7 +18,7 @@ const services = [
     description:
       "Stay protected with AI-powered emergency detection designed to recognize potential danger and help people seek assistance.",
     tags: ["AI Detection", "Emergency Alerts"],
-    link: "/sos",
+    link: "https://sos-system-06x2.onrender.com/",
     accent: "from-blue-500 to-cyan-400",
     glow: "group-hover:shadow-blue-500/10",
   },
@@ -40,7 +40,7 @@ const services = [
     description:
       "Explore reported incidents and location-based safety information to make more informed decisions about your surroundings.",
     tags: ["Location Awareness", "Safety Insights"],
-    link: "/live-map",
+    link: "https://safeguard-live.vercel.app/",
     accent: "from-sky-400 to-indigo-500",
     glow: "group-hover:shadow-indigo-500/10",
   },
@@ -51,7 +51,7 @@ const services = [
     description:
       "Connect with your community, share local concerns, and encourage collective responsibility for safer public spaces.",
     tags: ["Public Awareness", "Civic Action"],
-    link: "/community",
+    link: "/area-report",
     accent: "from-indigo-400 to-cyan-400",
     glow: "group-hover:shadow-cyan-500/10",
   },
@@ -61,7 +61,7 @@ export default function Services() {
   return (
     <section
       id="services"
-      className="relative isolate w-full overflow-hidden bg-[#020817] py-24 text-white sm:py-28 lg:py-32"
+      className="relative isolate w-full overflow-hidden bg-[#020817] py-24 text-white sm:py-28 lg:py-24"
     >
       {/* Background effects */}
       <div className="pointer-events-none absolute -left-40 top-20 -z-10 h-96 w-96 rounded-full bg-blue-600/10 blur-[130px]" />

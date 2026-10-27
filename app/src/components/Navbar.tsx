@@ -9,6 +9,7 @@ import {
   FaArrowRight,
   FaChevronDown,
 } from "react-icons/fa";
+import Image from "next/image";
 
 const navLinks = [
   { name: "Home", href: "/" },
@@ -33,7 +34,14 @@ export default function Navbar() {
             onClick={() => setIsOpen(false)}
           >
             <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#04F06A]/25 bg-[#04F06A]/10 text-[#04F06A] transition duration-300 group-hover:bg-[#04F06A]/20 group-hover:shadow-lg group-hover:shadow-[#04F06A]/10">
-              <FaShieldAlt className="text-2xl" />
+              <Image
+                src="/image/logo.png"
+                alt="ShurokkhaAI Logo"
+                width={44}
+                height={44}
+                priority
+                className="h-full w-full object-contain p-1"
+              />
             </span>
 
             <span className="text-xl font-bold tracking-tight text-white sm:text-2xl">

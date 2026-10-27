@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_URL || "https://shurokkha-ai-server.vercel.app"}/api/area-reports`;
+const API_URL = `${process.env.NEXT_PUBLIC_API_URL || ""}/api/area-reports`;
 
 type AreaReport = {
   _id: string;

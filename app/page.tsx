@@ -36,8 +36,7 @@ export default function Home() {
       <AboutUs />
       <Services />
       <HowWeWork />
-      <VideoSection />
-      <Footer />
+  
 
       {/* Live Map Popup */}
       {showPopup && (
