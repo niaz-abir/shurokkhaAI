@@ -18,7 +18,7 @@ const steps = [
       "Report a safety concern, share a local problem, or request urgent assistance. Every report begins with someone willing to speak up.",
     icon: FaExclamationTriangle,
     points: ["Community issue reporting", "Safety concern submission"],
-    video: "/image/area-report.mp4",
+    video: "/image/community-update.mp4",
   },
   {
     number: "02",
@@ -28,7 +28,7 @@ const steps = [
       "Location-based information helps people understand where incidents happen and which areas may need more attention.",
     icon: FaMapMarkerAlt,
     points: ["Location-based reports", "Local safety awareness"],
-    video: "/image/community.mp4",
+    video: "/image/livemap-updated.mp4",
   },
   {
     number: "03",
@@ -38,7 +38,7 @@ const steps = [
       "Where implemented, AI-assisted tools can help organize submitted information and highlight patterns for better-informed decisions.",
     icon: FaBrain,
     points: ["AI-assisted analysis", "Information-driven awareness"],
-    video: "/image/livemap.mp4",
+    video: "/image/sos-updated.mp4",
   },
   {
     number: "04",
